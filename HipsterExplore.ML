@@ -1,6 +1,5 @@
 (*  Authors:     Moa Johansson, Chalmers University of Technology
                  Irene Lobo Valbuena, Chalmers University of Technology
-
 Hipster theory exploration with QuickSpec 2 via tip-spec
 *)
 
@@ -16,6 +15,24 @@ struct
 (*-----------------------------------------------------------------------------------------*)
 (* Create a proof script for lemmas found.  *)
 (*-----------------------------------------------------------------------------------------*)
+(*edit*)
+fun print_to_log to_print ctxt =  (*if opening the file everytime affects execution time drastically, might want
+                        to change it to be opened only a single time, when starting run of hipster*)
+  let
+    (*val log_file_name = "./benchmark/log_hipster.txt";*)
+    val thy = Proof_Context.theory_of ctxt
+    val log_file_name = Hipster_Setup.filepath^ (Context.theory_name thy) ^"_easy2find.log" 
+    val _ = Hipster_Utils.maybe_output ctxt 50 ("printing to: " ^ log_file_name)
+    val _ = Hipster_Utils.maybe_print ctxt 50 ("printing to: " ^ log_file_name)
+    val fd = TextIO.openAppend log_file_name;
+    val _ = TextIO.output (fd, to_print) handle e => (TextIO.closeOut fd; raise e);
+    val _ = TextIO.closeOut fd;
+  in
+    ()
+  end
+
+val start_time_explore = Time.now()      
+(*end of edit*)
 fun proof_str ctxt proof_script name thm =
   let
     (* Print variables without ? *)
@@ -39,6 +56,9 @@ fun proof_str ctxt proof_script name thm =
    own inner_ctxt which handles fixing of variables etc. The theorem is the exported back into
    the updated outer context, which is returned. *)
 fun try_nxt_conj outer_ctxt =
+let
+  val start_time = Time.toMilliseconds(Time.now())
+in
   case (ThyExpl_Data.open_conjs_of_ctxt outer_ctxt) of
     [] => (*retry open_conjs if we have some new proved since last time.*)
       if (ThyExpl_Data.progress_of_ctxt outer_ctxt)
@@ -60,6 +80,18 @@ fun try_nxt_conj outer_ctxt =
         case SINGLE (Tactic_Data.routine_tac inner_ctxt) c of (* Discard this, it is trivial *)
           SOME _ =>
             let val _ = Hipster_Utils.maybe_output inner_ctxt 55 ("Trivial proof: "^lemma_str)
+            (*edit*)
+                
+                  val time_took = Time.toMilliseconds(Time.now())-start_time;
+                  val titleStr ="-------------------------------------------\nNew Lemma Found:\n" 
+                  val tacticStr = "Proved using easy tactics of proof\n"
+                  val lemmaStr = "Lemma is: " ^ lemma_str ^ "\n"
+                  val timeStr = "Took proof "^(LargeInt.toString(time_took)) ^" milliseconds\n"
+                  val strToPrint = titleStr ^ tacticStr ^ lemmaStr ^ timeStr
+                  (*TODO: change this to print time found*)
+                  (*val _ = print_to_log strToPrint outer_ctxt;*)
+                  val _ = print_to_log strToPrint inner_ctxt;
+                  (*end of edit*)
             in SOME (ThyExpl_Data.set_open_conjs_ctxt cs outer_ctxt) 
             end
             
@@ -81,11 +113,21 @@ fun try_nxt_conj outer_ctxt =
 
                   val _ = Hipster_Utils.maybe_print outer_ctxt 25
                             ("Proved: " ^ lemma_str)              
-
                   val (new_nm, outer_ctxt') = ThyExpl_Data.fresh_name outer_ctxt (* Get name from outer context *) 
                   val proof_script = proof_str res_ctxt (Tactic_Data.hard_tac_str res_ctxt) new_nm proved_thm
                   val named_thm = Thm.put_name_hint new_nm final_thm
-                  
+                  (*edit*)
+                  val time_took = Time.toMilliseconds(Time.now())-start_time;
+                  val titleStr ="-------------------------------------------\nNew Lemma Found:\n" 
+                  val tacticStr = "Proved using easy tactics of proof\n"
+                  val lemmaStr = "Lemma is: " ^ lemma_str ^ "\n"
+                  val timeStr = "Took proof "^(LargeInt.toString(time_took)) ^" milliseconds\n"
+                  val descriptionStr = "Description:\n" ^ (proof_script)^"\n"
+                  val strToPrint = titleStr ^ tacticStr ^ lemmaStr ^ timeStr^descriptionStr
+                  (*TODO: change this to print time found*)
+                  (*val _ = print_to_log strToPrint outer_ctxt*)
+                  val _ = print_to_log strToPrint inner_ctxt
+                (*end of edit*)
                 in
                   SOME (outer_ctxt' (* FIXME: The next line goes wrong if there are fixed variables or from a proof attempt.*)
                           |> snd o Local_Theory.note ((Binding.name new_nm,[]), [named_thm]) 
@@ -103,7 +145,7 @@ fun try_nxt_conj outer_ctxt =
                           |> ThyExpl_Data.add_failed_ctxt c)
                 end 
       end 
-
+end
 
 
 fun proof_loop ctxt cand_lemmas_str =
@@ -121,13 +163,13 @@ fun proof_loop ctxt cand_lemmas_str =
                 |> merge_split_eqs
 
     val ctxt1 = ThyExpl_Data.init_expl ctxt [] [] NONE conjs
-
     fun recf ctxt =
       case (try_nxt_conj ctxt) of
         NONE => ctxt
       | SOME ctxt' => recf ctxt'
+      
   in
-    recf ctxt1
+   recf ctxt1 
   end
 
 
@@ -204,8 +246,16 @@ fun mk_lemma_str ctxt thm =
    that can be pasted into the theory file. *)
 fun explore' cond_opt obs_opt ctxt const_nms =
   let
+(*added*)
+    val _ = print_to_log ("Start time: "^ (Time.toString Hipster_Setup.start_time)) ctxt
+(*end of edit*)
     val conjs = tipspec_explore ctxt cond_opt obs_opt const_nms
     val res_ctxt = proof_loop ctxt conjs
+(*added*)
+    val end_time = Time.now()
+    val _ = print_to_log ("End time: " ^ Time.toString(end_time) ^ " seconds\n") ctxt
+    val _ = print_to_log ("Total time: " ^ Time.toString(end_time - Hipster_Setup.start_time) ^ " seconds\n") ctxt
+(*end of edit*)
     val output = Library.space_implode "\n\n"
                 (map (mk_lemma_str res_ctxt)
                     ((ThyExpl_Data.proved_of_ctxt res_ctxt)

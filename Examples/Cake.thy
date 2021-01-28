@@ -50,7 +50,7 @@ hipster cutLeft cutRight
 
 
 hipster merge isTasty
-(*
+
 lemma lemma_a [thy_expl,simp]: "merge x2 Eaten = x2"
 by (hipster_induct_simp_metis Cake.merge.simps Cake.isTasty.simps)
 
@@ -65,7 +65,7 @@ apply simp
 
 lemma unknown2 [thy_expl]: "isTasty (merge x x) = isTasty x"
 by simp
-*)
+
 
 
 end

@@ -9,7 +9,7 @@ ML\<open>
 
 structure Hipster_Setup =
 struct
-
+val start_time = Time.now()
 (* Set these to your path to the Hipster directory *)
 val basepath =
   case getenv "HIPSTER_HOME" of
